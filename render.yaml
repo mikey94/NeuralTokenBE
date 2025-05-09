@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: neuraltoken-fastapi
+    env: python
+    plan: free
+    buildCommand: ""
+    startCommand: uvicorn main:app --host 0.0.0.0 --port 10000
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 10000
