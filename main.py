@@ -103,6 +103,63 @@ def predict_next_n_days(n=7):
 
     return future_preds
 
+# --- Get price data summary ---
+
+def get_price_summary_by_period():
+    """
+    Returns min, max, mean, and last price grouped by Month, Quarter, and Year.
+    """
+    summary_df = df.reset_index()
+    summary_df['Year'] = summary_df['timeClose'].dt.year
+    summary_df['Month'] = summary_df['timeClose'].dt.to_period('M').astype(str)
+    summary_df['Quarter'] = summary_df['timeClose'].dt.to_period('Q').astype(str)
+
+    yearly = summary_df.groupby('Year')['priceClose'].agg(['min', 'max', 'mean', 'last']).reset_index()
+    quarterly = summary_df.groupby('Quarter')['priceClose'].agg(['min', 'max', 'mean', 'last']).reset_index()
+    monthly = summary_df.groupby('Month')['priceClose'].agg(['min', 'max', 'mean', 'last']).reset_index()
+
+    return {
+        "yearly": yearly.round(2).to_dict(orient='records'),
+        "quarterly": quarterly.round(2).to_dict(orient='records'),
+        "monthly": monthly.round(2).to_dict(orient='records'),
+    }
+
+def get_daily_changes_for_month(year: int, month: int):
+    """
+    Returns daily price changes for a given month and year.
+    """
+    # Filter the data by year and month
+    filtered = df[(df.index.year == year) & (df.index.month == month)]
+
+    if filtered.empty:
+        return {"message": "No data found for the selected month."}
+
+    # Prepare daily data: date, open, close, change
+    result = []
+    grouped = filtered.resample('D').agg({'priceClose': ['first', 'last']})
+    grouped.columns = ['open', 'close']
+    grouped.dropna(inplace=True)
+
+    for index, row in grouped.iterrows():
+        result.append({
+            "date": str(index.date()),
+            "open": round(row['open'], 2),
+            "close": round(row['close'], 2),
+        })
+
+    return result
+
+def get_start_day():
+    start_date = df.index.min().date()
+    return {
+        "date": str(start_date)
+    }
+
+def get_end_day():
+    end_date = df.index.max().date()
+    return {
+        "date": str(end_date)
+    }
 # --- FastAPI Endpoints ---
 
 @app.get("/predict/next-day")
@@ -112,6 +169,22 @@ def get_next_day():
 @app.get("/predict/next-7-days")
 def get_next_7_days():
     return {"next_7_days": predict_next_n_days(7)}
+
+@app.get("/summary")
+def get_price_summary():
+    return get_price_summary_by_period()
+
+@app.get("/daily-changes/{year}/{month}")
+def get_daily_changes(year: int, month: int):
+    return get_daily_changes_for_month(year, month)
+
+@app.get("/start-date")
+def get_start_date():
+    return get_start_day()
+
+@app.get("/end-date")
+def get_end_date():
+    return get_end_day()
 
 @app.get("/healthcheck")
 def healthcheck():
