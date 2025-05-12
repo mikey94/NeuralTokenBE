@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi import HTTPException
 from pydantic import BaseModel
 import pandas as pd
 import numpy as np
@@ -176,7 +177,10 @@ def get_price_summary():
 
 @app.get("/daily-changes/{year}/{month}")
 def get_daily_changes(year: int, month: int):
-    return get_daily_changes_for_month(year, month)
+    result = get_daily_changes_for_month(year, month)
+    if isinstance(result, dict) and "message" in result:
+        raise HTTPException(status_code=404, detail=result["message"])
+    return result
 
 @app.get("/start-date")
 def get_start_date():
