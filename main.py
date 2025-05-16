@@ -21,7 +21,7 @@ app.add_middleware(
 arima_fit, lstm_model, xgb_model, scaler = load_models()
 
 # Load and preprocess latest data
-df = pd.read_csv("Ethereum Historical Data 2018-2025.csv")
+df = pd.read_csv("Ethereum Historical Data.csv")
 df['timeClose'] = pd.to_datetime(df['Start'])
 df['priceClose'] = df['Close']
 df = df.sort_values(by='timeClose')
