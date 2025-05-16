@@ -19,7 +19,6 @@ env/
 *.onnx
 
 # Data files
-*.csv
 *.tsv
 *.db
 
