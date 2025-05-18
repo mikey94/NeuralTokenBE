@@ -110,15 +110,24 @@ def predict_next_n_days(n=7):
 
 # --- Get price data summary ---
 
-def get_price_summary_by_period():
+def get_price_summary_by_period(year: int = None, month: int = None):
     """
     Returns min, max, mean, and last price grouped by Month, Quarter, and Year.
     """
-    summary_df = df.reset_index()
-    summary_df['Year'] = summary_df['timeClose'].dt.year
-    summary_df['Month'] = summary_df['timeClose'].dt.to_period('M').astype(str)
-    summary_df['Quarter'] = summary_df['timeClose'].dt.to_period('Q').astype(str)
-
+    summary_df = df.copy()
+    summary_df['Year'] = summary_df.index.year.astype(int)
+    summary_df['Month'] = summary_df.index.month.astype(int)
+    summary_df['MonthStr'] = summary_df.index.to_period('M').astype(str)
+    summary_df['Quarter'] = summary_df.index.to_period('Q').astype(str)
+    
+    if year is not None:
+        summary_df = summary_df[summary_df['Year'] == year]
+    if month is not None:
+        summary_df = summary_df[summary_df['Month'] == month]
+    
+    if summary_df.empty:
+        return {"message": "No data found for the given year and month"}
+    
     yearly = summary_df.groupby('Year')['priceClose'].agg(['min', 'max', 'mean', 'last']).reset_index()
     quarterly = summary_df.groupby('Quarter')['priceClose'].agg(['min', 'max', 'mean', 'last']).reset_index()
     monthly = summary_df.groupby('Month')['priceClose'].agg(['min', 'max', 'mean', 'last']).reset_index()
@@ -176,8 +185,11 @@ def get_next_7_days():
     return {"next_7_days": predict_next_n_days(7)}
 
 @app.get("/summary")
-def get_price_summary():
-    return get_price_summary_by_period()
+def get_price_summary(year: int = None, month: int = None):
+    result = get_price_summary_by_period(year, month)
+    if isinstance(result, dict) and "message" in result:
+        raise HTTPException(status_code=404, detail=result["message"])
+    return result
 
 @app.get("/daily-changes/{year}/{month}")
 def get_daily_changes(year: int, month: int):
