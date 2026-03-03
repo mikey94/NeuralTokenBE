@@ -4,6 +4,8 @@ import pandas as pd
 import numpy as np
 from loadModels import load_models
 from sklearn.preprocessing import StandardScaler
+from datetime import datetime, timezone
+import requests
 
 # --- Create FastAPI app ---
 app = FastAPI()
@@ -23,10 +25,77 @@ seq_length_map = {
     "xrp": 12
 }
 
+COIN_SYMBOL_MAP = {
+    "bitcoin": "BTCUSDT",
+    "ethereum": "ETHUSDT",
+    "xrp": "XRPUSDT"
+}
+
+# fetch historical data from binance API
+
+def fetch_binance_data(symbol: str, interval: str = "1d", limit: int = 1000):
+    url = "https://api.binance.com/api/v3/klines"
+
+    start_ts = int(datetime(2018, 1, 1, tzinfo=timezone.utc).timestamp() * 1000)
+
+    all_rows = []
+
+    while True:
+        params = {
+            "symbol": symbol,
+            "interval": interval,
+            "limit": limit,
+            "startTime": start_ts
+        }
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        if not data:
+            break
+
+        all_rows.extend(data)
+
+        if len(data) < limit:
+            break
+
+        start_ts = data[-1][6] + 1
+    return all_rows
+
 # --- Utility: build fresh dataframe ---
-def load_df(coin: str):
-    df = pd.read_csv(f"{coin.capitalize()} Historical Data.csv")
-    df['timeClose'] = pd.to_datetime(df['Start'])
+
+def load_df(coin: str) -> pd.DataFrame:
+    coin_lower = coin.lower()
+
+    if coin_lower not in COIN_SYMBOL_MAP:
+        raise HTTPException(
+            status_code = 400,
+            detail=f"Unsupported coin '{coin}'. Supported: {list(COIN_SYMBOL_MAP.keys())}"
+        )
+    
+    symbol = COIN_SYMBOL_MAP[coin_lower]
+
+    try:
+        raw = fetch_binance_data(symbol=symbol)
+    except requests.RequestException as e:
+        raise HTTPException(status_code=503, detail=f"Binance API error: {str(e)}")
+    
+    records = []
+    for k in raw:
+        records.append({
+            "Start": pd.to_datetime(k[0], unit="ms", utc=True).normalize(),
+            "End": pd.to_datetime(k[6], unit="ms", utc=True).normalize(),
+            "Open": float(k[1]),
+            "High": float(k[2]),
+            "Low": float(k[3]),
+            "Close": float(k[4]),
+            "Volume": float(k[5]),
+            "Market Cap": float(k[7])
+        })
+
+    df = pd.DataFrame(records)
+
+    df['timeClose'] = pd.to_datetime(df['Start']).dt.tz_localize(None)
     df['priceClose'] = df['Close']
     df = df.sort_values(by='timeClose')
     df = df[['timeClose', 'priceClose', 'Volume', 'Market Cap']].drop_duplicates().dropna()
