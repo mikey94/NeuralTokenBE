@@ -8,3 +8,4 @@ tensorflow
 statsmodels
 openpyxl
 starlette
+requests
